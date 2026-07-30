@@ -30,9 +30,11 @@ class InstagramCrawlerSpider(scrapy.Spider):
         }
     }"""
 
-    STARTING_ACCOUNT = "thehaydens_home"
+    STARTING_ACCOUNT = "b4youscrolltv"
 
-    FLAG_KEYWORDS = ["coffee"]
+    FLAG_KEYWORDS = [
+        "judging",
+    ]
 
     async def start(self):
         """
@@ -83,6 +85,7 @@ class InstagramCrawlerSpider(scrapy.Spider):
             settings.MAX_TOTAL_POST_CHECKED_PER_ACCOUNT
         )
         self.max_check_for_flag_time = settings.MAX_CHECK_FOR_FLAG_TIME
+        self.max_username_scan = settings.MAX_USERNAME_SCAN
 
         self.stats = {
             "total_scraped": 0,
@@ -1101,8 +1104,9 @@ class InstagramCrawlerSpider(scrapy.Spider):
             previous_count = -1
             stagnant_rounds = 0
             round_number = 0
+            max_stagnant_rounds = 3
 
-            while stagnant_rounds < 5:
+            while stagnant_rounds < max_stagnant_rounds:
 
                 round_number += 1
 
@@ -1153,7 +1157,8 @@ class InstagramCrawlerSpider(scrapy.Spider):
                     stagnant_rounds += 1
 
                     self.logger.info(
-                        "No new usernames found " f"({stagnant_rounds}/5)"
+                        "No new usernames found "
+                        f"({stagnant_rounds}/{max_stagnant_rounds})"
                     )
 
                 else:
@@ -1163,21 +1168,27 @@ class InstagramCrawlerSpider(scrapy.Spider):
 
                     self.logger.info("New usernames discovered.")
 
+                if stagnant_rounds >= max_stagnant_rounds:
+                    self.logger.info("Reached end of relationship list.")
+                    break
+
+                if len(usernames) >= self.max_username_scan:
+                    self.logger.info(
+                        f"Reached username scan cap ({len(usernames)/{self.max_username_scan}})"
+                    )
+                    break
+
                 # --------------------------------------------------------
                 # SCROLL
                 # --------------------------------------------------------
 
-                if stagnant_rounds >= 5:
-                    self.logger.info("Reached end of relationship list.")
-                    break
-
                 self.logger.info("Scrolling relationship list...")
 
-                await scrollable.evaluate("""
-                    el => {
-                        el.scrollBy(0, el.clientHeight * 0.8);
-                    }
-                    """)
+                distance = random.uniform(0.4, 1.2)
+                await scrollable.evaluate(
+                    "(el, d) => el.scrollBy(0, el.clientHeight * d)",
+                    distance,
+                )
 
                 await self._random_delay(page, 300)
 
@@ -1207,24 +1218,10 @@ class InstagramCrawlerSpider(scrapy.Spider):
         page: Page,
     ) -> str | None:
         """
-        Extract the canonical URL of the currently opened post.
-
-        Returns:
-            https://www.instagram.com/p/XXXXXXXX/
-            or None if not found.
+        Return the URL of the currently opened post.
         """
         try:
-            link = page.locator('div[role="dialog"] a[href^="/p/"]').first
-
-            href = await link.get_attribute("href")
-
-            if not href:
-                return None
-
-            if href.startswith("/"):
-                return f"https://www.instagram.com{href}"
-
-            return href
+            return page.url
 
         except Exception:
             self.logger.exception("Failed to extract post URL.")

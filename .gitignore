@@ -137,3 +137,5 @@ api_keys.py
 
 # sensitive
 core/sensitive.py
+*.json*
+*.png*

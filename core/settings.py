@@ -1,5 +1,8 @@
 # core/settings.py
 import os
+from datetime import datetime
+
+from core import sensitive
 
 # ============================================================
 # SELECT CRAWLER
@@ -19,8 +22,8 @@ SPIDER_MODULES = [
 # ============================================================
 
 
-INSTAGRAM_USERNAME = "cbmdata.app"
-INSTAGRAM_PASSWORD = "demimasadepan"
+INSTAGRAM_USERNAME = sensitive.INSTAGRAM_USERNAME
+INSTAGRAM_PASSWORD = sensitive.INSTAGRAM_PASSWORD
 
 # ============================================================
 # PLAYWRIGHT
@@ -77,6 +80,7 @@ MAX_TOTAL_SCRAPED = 10
 RANDOMIZE_DOWNLOAD_DELAY = True
 MAX_TOTAL_POST_CHECKED_PER_ACCOUNT = 10
 MAX_CHECK_FOR_FLAG_TIME = 60 * 15
+MAX_USERNAME_SCAN = 25
 
 DEPTH_LIMIT = 2
 CLOSESPIDER_PAGECOUNT = 50
@@ -92,8 +96,9 @@ RETRY_TIMES = 3
 SCHEDULER_DEBUG = True
 LOG_LEVEL = "INFO"
 
+now = datetime.now().strftime("%Y-%m-%d_%H:%M")
 FEEDS = {
-    "instagram_data.json": {
+    f"instagram_data_{now}.json": {
         "format": "json",
         "indent": 2,
         "overwrite": True,
