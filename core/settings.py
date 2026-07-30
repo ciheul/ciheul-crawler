@@ -66,7 +66,10 @@ PLAYWRIGHT_CONTEXTS = {
     }
 }
 
-if os.path.exists("playwright_state.json"):
+if (
+    os.path.exists("playwright_state.json")
+    and os.path.getsize("playwright_state.json") > 100
+):
     PLAYWRIGHT_CONTEXTS["default"]["storage_state"] = "playwright_state.json"
 
 
@@ -75,7 +78,7 @@ if os.path.exists("playwright_state.json"):
 # ============================================================
 
 CONCURRENT_REQUESTS = 2
-DOWNLOAD_DELAY = 5
+DOWNLOAD_DELAY = 4
 MAX_TOTAL_SCRAPED = 10
 RANDOMIZE_DOWNLOAD_DELAY = True
 MAX_TOTAL_POST_CHECKED_PER_ACCOUNT = 10
@@ -83,7 +86,7 @@ MAX_CHECK_FOR_FLAG_TIME = 60 * 15
 MAX_USERNAME_SCAN = 25
 
 DEPTH_LIMIT = 2
-CLOSESPIDER_PAGECOUNT = 50
+CLOSESPIDER_PAGECOUNT = 20
 
 RETRY_ENABLED = True
 RETRY_TIMES = 3
@@ -96,7 +99,7 @@ RETRY_TIMES = 3
 SCHEDULER_DEBUG = True
 LOG_LEVEL = "INFO"
 
-now = datetime.now().strftime("%Y-%m-%d_%H:%M")
+now = datetime.now().strftime("%Y-%m-%d_%H-%M")
 FEEDS = {
     f"instagram_data_{now}.json": {
         "format": "json",

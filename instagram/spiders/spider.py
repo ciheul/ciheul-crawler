@@ -1,4 +1,5 @@
 # instagram/spiders/spider.py
+import json
 import math
 import random
 import re
@@ -348,12 +349,6 @@ class InstagramCrawlerSpider(scrapy.Spider):
 
         except Exception as e:
             self.logger.error(f"Instagram login failed: {e}")
-
-            try:
-                await page.screenshot(path="debug_instagram_login_failed.png")
-            except Exception:
-                pass
-
             return False
 
     async def _wait_for_whatsapp_verification(
@@ -678,6 +673,17 @@ class InstagramCrawlerSpider(scrapy.Spider):
             flagged_post["following"] = following
             flagged_post["timestamp"] = self._get_timestamp()
             flagged_post["depth"] = depth
+
+            per_user_json = (
+                f"instagram_data_{settings.now}_{current_account}.json"
+            )
+            with open(per_user_json, "w", encoding="utf-8") as file:
+                file.write(json.dumps(flagged_post))
+
+            per_user_json = f"instagram_data_{settings.now}_append.json"
+            with open(per_user_json, "a", encoding="utf-8") as file:
+                file.write(json.dumps(flagged_post))
+                file.write("\n\n")
 
             yield flagged_post
 
@@ -1174,7 +1180,7 @@ class InstagramCrawlerSpider(scrapy.Spider):
 
                 if len(usernames) >= self.max_username_scan:
                     self.logger.info(
-                        f"Reached username scan cap ({len(usernames)/{self.max_username_scan}})"
+                        f"Reached username scan cap ({len(usernames)}/{self.max_username_scan})"
                     )
                     break
 
