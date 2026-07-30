@@ -134,3 +134,6 @@ api_keys.py
 
 .prettierignore
 .prettierrc.json
+
+# sensitive
+core/sensitive.py
