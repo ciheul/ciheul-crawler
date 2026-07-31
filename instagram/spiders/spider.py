@@ -31,10 +31,13 @@ class InstagramCrawlerSpider(scrapy.Spider):
         }
     }"""
 
-    STARTING_ACCOUNT = "b4youscrolltv"
+    STARTING_ACCOUNT = "zahwalytm"
 
     FLAG_KEYWORDS = [
-        "judging",
+        "kartini",
+        "queens",
+        "queen",
+        "pengalaman",
     ]
 
     async def start(self):
@@ -87,6 +90,7 @@ class InstagramCrawlerSpider(scrapy.Spider):
         )
         self.max_check_for_flag_time = settings.MAX_CHECK_FOR_FLAG_TIME
         self.max_username_scan = settings.MAX_USERNAME_SCAN
+        self.max_comments_scan = settings.MAX_COMMENTS_SCAN
 
         self.stats = {
             "total_scraped": 0,
@@ -674,13 +678,11 @@ class InstagramCrawlerSpider(scrapy.Spider):
             flagged_post["timestamp"] = self._get_timestamp()
             flagged_post["depth"] = depth
 
-            per_user_json = (
-                f"instagram_data_{settings.now}_{current_account}.json"
-            )
+            per_user_json = f"output_{settings.now}/instagram_data_{settings.now}_{current_account}.json"
             with open(per_user_json, "w", encoding="utf-8") as file:
                 file.write(json.dumps(flagged_post))
 
-            per_user_json = f"instagram_data_{settings.now}_append.json"
+            per_user_json = f"output_{settings.now}/instagram_data_{settings.now}_append.json"
             with open(per_user_json, "a", encoding="utf-8") as file:
                 file.write(json.dumps(flagged_post))
                 file.write("\n\n")
@@ -778,22 +780,6 @@ class InstagramCrawlerSpider(scrapy.Spider):
     ) -> dict | None:
         """
         Open recent posts and search them for configured flag keywords.
-
-        Returns:
-            [
-                {
-                    "post_url": str,
-                    "caption": str | None,
-                    "media": [
-                        {
-                            "type": "image" | "video",
-                            "url": str,
-                        }
-                    ],
-                    "flagged_keywords": list[str],
-                }
-            ]
-
         Stops immediately after the first flagged post.
         """
 
@@ -921,6 +907,9 @@ class InstagramCrawlerSpider(scrapy.Spider):
                                     page
                                 ),
                                 "media": await self._extract_post_media(page),
+                                "comments": await self._extract_post_comments(
+                                    page
+                                ),
                                 "flagged_keywords": flagged_keywords,
                             }
 
@@ -1023,7 +1012,7 @@ class InstagramCrawlerSpider(scrapy.Spider):
 
         except Exception as e:
             self.logger.error(f"Failed checking flags for {account}: {e}")
-            return []
+            return None
 
     async def _extract_followers_from_modal(
         self,
@@ -1345,6 +1334,178 @@ class InstagramCrawlerSpider(scrapy.Spider):
             unique.append(item)
 
         return unique
+
+    async def _extract_post_comments(
+        self,
+        page: Page,
+        max_comments: int = 20,
+    ) -> list[dict]:
+        """
+        Extract top-level comments from the opened Instagram post.
+
+        Returns:
+            [
+                {
+                    "username": "...",
+                    "comment": "...",
+                },
+            ]
+        """
+
+        comments = []
+        seen = set()
+
+        try:
+            dialog = page.locator("div[role='dialog']").last
+
+            await dialog.wait_for(
+                state="visible",
+                timeout=self._random_timeout(5000),
+            )
+
+            # ------------------------------------------------------------
+            # Wait for first comment
+            # ------------------------------------------------------------
+
+            first_comment = dialog.locator(
+                "li:has(time):has(a[href^='/'])"
+            ).first
+
+            await first_comment.wait_for(
+                state="visible",
+                timeout=self._random_timeout(5000),
+            )
+
+            # ------------------------------------------------------------
+            # Find scrollable container
+            # ------------------------------------------------------------
+
+            scrollable = await first_comment.evaluate_handle("""
+                node => {
+                    let p = node.parentElement;
+
+                    while (p) {
+                        if (p.scrollHeight > p.clientHeight + 10)
+                            return p;
+
+                        p = p.parentElement;
+                    }
+
+                    return null;
+                }
+                """)
+
+            if await scrollable.json_value() is None:
+                self.logger.warning("Comment scroll container not found.")
+                return []
+
+            previous_count = 0
+            stagnant_rounds = 0
+
+            while len(comments) < max_comments and stagnant_rounds < 3:
+
+                rows = dialog.locator("li:has(time):has(a[href^='/'])")
+
+                before = len(comments)
+
+                row_count = await rows.count()
+
+                for i in range(row_count):
+
+                    if len(comments) >= max_comments:
+                        break
+
+                    row = rows.nth(i)
+
+                    try:
+
+                        username = (
+                            await row.locator("a[href^='/']").first.inner_text()
+                        ).strip()
+
+                        spans = row.locator("span[dir='auto']")
+
+                        comment = None
+
+                        for j in range(await spans.count()):
+
+                            text = (await spans.nth(j).inner_text()).strip()
+
+                            if (
+                                text
+                                and text != username
+                                and text.lower() != "reply"
+                                and "like" not in text.lower()
+                            ):
+                                comment = text
+                                break
+
+                        if not comment:
+                            continue
+
+                        key = (username, comment)
+
+                        if key in seen:
+                            continue
+
+                        seen.add(key)
+
+                        comments.append(
+                            {
+                                "username": username,
+                                "comment": comment,
+                            }
+                        )
+
+                    except Exception:
+                        continue
+
+                self.logger.info(f"Collected {len(comments)} comments.")
+
+                if len(comments) == previous_count:
+                    stagnant_rounds += 1
+                else:
+                    previous_count = len(comments)
+                    stagnant_rounds = 0
+
+                if len(comments) >= max_comments:
+                    break
+
+                # --------------------------------------------------------
+                # Load more comments
+                # --------------------------------------------------------
+
+                load_more = dialog.locator(
+                    'button:has(svg[aria-label="Load more comments"])'
+                )
+
+                if (
+                    await load_more.count() > 0
+                    and await load_more.first.is_visible()
+                ):
+                    self.logger.info("Loading more comments...")
+
+                    try:
+                        await load_more.first.click()
+                        await self._random_delay(page, 700)
+                    except Exception:
+                        pass
+
+                # --------------------------------------------------------
+                # Scroll comment container
+                # --------------------------------------------------------
+
+                await scrollable.evaluate(
+                    "(el) => el.scrollBy(0, el.clientHeight * 0.9)"
+                )
+
+                await self._random_delay(page, 500)
+
+            return comments
+
+        except Exception as e:
+            self.logger.exception(f"Failed extracting comments: {e}")
+            return []
 
     def _get_timestamp(self) -> str:
         """

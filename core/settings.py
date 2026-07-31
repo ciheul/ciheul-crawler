@@ -1,6 +1,7 @@
 # core/settings.py
 import os
 from datetime import datetime
+from pathlib import Path
 
 from core import sensitive
 
@@ -84,6 +85,7 @@ RANDOMIZE_DOWNLOAD_DELAY = True
 MAX_TOTAL_POST_CHECKED_PER_ACCOUNT = 10
 MAX_CHECK_FOR_FLAG_TIME = 60 * 15
 MAX_USERNAME_SCAN = 25
+MAX_COMMENTS_SCAN = 20
 
 DEPTH_LIMIT = 2
 CLOSESPIDER_PAGECOUNT = 20
@@ -100,8 +102,11 @@ SCHEDULER_DEBUG = True
 LOG_LEVEL = "INFO"
 
 now = datetime.now().strftime("%Y-%m-%d_%H-%M")
+output_dir = Path(f"output_{now}")
+output_dir.mkdir(parents=True, exist_ok=True)
+
 FEEDS = {
-    f"instagram_data_{now}.json": {
+    f"output_{now}/instagram_data_{now}.json": {
         "format": "json",
         "indent": 2,
         "overwrite": True,
