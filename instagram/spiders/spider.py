@@ -552,16 +552,6 @@ class InstagramCrawlerSpider(scrapy.Spider):
             self.stats["total_flags_found"] += 1
 
             # ============================================================
-            # DEPTH LIMIT
-            # ============================================================
-
-            if depth >= self.max_depth:
-                self.logger.info(f"Maximum depth ({self.max_depth}) reached.")
-
-                yield flagged_post
-                return
-
-            # ============================================================
             # RETURN TO PROFILE
             # ============================================================
 
@@ -688,6 +678,16 @@ class InstagramCrawlerSpider(scrapy.Spider):
                 file.write("\n\n")
 
             yield flagged_post
+
+            # ============================================================
+            # DEPTH LIMIT
+            # ============================================================
+
+            if depth >= self.max_depth:
+                self.logger.info(f"Maximum depth ({self.max_depth}) reached.")
+
+                yield flagged_post
+                return
 
             # ============================================================
             # DISCOVER NEW ACCOUNTS
@@ -868,7 +868,7 @@ class InstagramCrawlerSpider(scrapy.Spider):
                         await self._random_delay(page, 150)
 
                         await posts.nth(index).click(
-                            timeout=self._random_timeout(2500),
+                            timeout=self._random_timeout(3000),
                         )
 
                         dialog = page.locator("div[role='dialog']").first
@@ -1405,9 +1405,6 @@ class InstagramCrawlerSpider(scrapy.Spider):
             while len(comments) < max_comments and stagnant_rounds < 3:
 
                 rows = dialog.locator("li:has(time):has(a[href^='/'])")
-
-                before = len(comments)
-
                 row_count = await rows.count()
 
                 for i in range(row_count):
@@ -1420,7 +1417,9 @@ class InstagramCrawlerSpider(scrapy.Spider):
                     try:
 
                         username = (
-                            await row.locator("a[href^='/']").first.inner_text()
+                            await row.locator(
+                                "h3 a[href^='/']"
+                            ).first.inner_text()
                         ).strip()
 
                         spans = row.locator("span[dir='auto']")
